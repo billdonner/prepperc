@@ -321,7 +321,7 @@ func writeVeracityPromptScript(_ urls:[String], gameFile:String)
 struct Prepper: ParsableCommand {
   static let configuration = CommandConfiguration(
     abstract: "Step 2: Prepper reads the JSON Challenges from Pumper de-duplicates, and prepares a new script. This script contains questions about the veracity of the JSON data and is read by Veracitator.",
-    version: "0.5.0",
+    version: "0.5.1",
     subcommands: [],
     defaultSubcommand: nil,
     helpNames: [.long, .short]
