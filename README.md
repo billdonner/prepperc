@@ -1,7 +1,7 @@
 #  Prepper - Prepare ChatGPT Output for IOS App
 
 Freeport.Software internal Utility 
-    0.5.1
+    0.5.3 templates moved to separate file 
 ```
 OVERVIEW: Step 2: Prepper reads the JSON Challenges from Pumper de-duplicates,
 and prepares a new script. This script contains questions about the veracity of

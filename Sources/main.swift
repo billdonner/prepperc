@@ -1,11 +1,4 @@
-// The Swift Programming Language
-// https://docs.swift.org/swift-book
-// 
-// Swift Argument Parser
-// https://swiftpackageindex.com/apple/swift-argument-parser/documentation
-
-
-
+// PREPPERC
 //"Read, Validate, and de-duplicate remote json Challenge files"
 
 //WARNING - output proceeds input
@@ -21,37 +14,18 @@ var count : Int = 0
 var bytesRead : Int = 0
 var topicCounts: [String:Int] = [:]
 var dupeCounts: [String:Int] = [:]
+var templateContents:String = ""
 
-let training_data = """
-***
-{
-  "inputs": [ {
-      "question": "What is the capital of Russia?",
-      "answer": "Moscow",
-      "id": "25EFF823-195B-4EE5-8189-A9B779E7D66D"
-    },{
-      "question": "What is the captial of France?",
-      "answer": "London",
-      "id": "85EFF823-095B-4EE5-8189-A9B779E7D66D"
-    }
-  ],
-  "outputs": [{
-      "id": "25EFF823-295B-4EE5-8189-A9B779E7D66D",
-      "truth": true,
-      "explanation": "Moscow is the capital now. Previously it was Kiev."
-    },
-    {
-      "id": "85EFF823-395B-4EE5-8189-A9B779E7D66D",
-      "truth": false,
-      "explanation": "Paris is the capital of France. London is in the UK"
-    }
-  ]
+enum PrepperError: Error {
+  case badInputURL
+  case badOutputURL
+  case badTemplateURL
+  case cantWrite
+  case noAPIKey
+  case noChallenges
+  case noOpinions
 }
-/* outputs should be precisely in the format above */
-{
-  "inputs": [
 
-"""
 
 func wprint(_ x:Any) {
   if warnings {
@@ -176,14 +150,7 @@ fileprivate func cleanupChallenges(_ cha: [Challenge])->[Challenge] {
   return challenges
 }
 
-enum PrepperError: Error {
-  case badInputURL
-  case badOutputURL
-  case cantWrite
-  case noAPIKey
-  case noChallenges
-  case noOpinions
-}
+
 fileprivate func prep(_ x:String, initial:String) throws  -> FileHandle? {
   if (FileManager.default.createFile(atPath: x, contents: nil, attributes: nil)) {
     print(">Prepper created \(x)")
@@ -209,8 +176,7 @@ fileprivate func writeAsPrompts<T:Encodable>(_ data: [T], _ outurl: URL) throws 
   var batchCount = 0
   let fh = try prep(String(outurl.absoluteString.dropFirst(7)),initial: "\n")!
   defer {
-   // fh.write("]".data(using: .utf8)!)
-    
+    // fh.write("]".data(using: .utf8)!)
     // this is very sensitive
     fh.write("]\n,\"outputs\": \n".data(using: .utf8)!)// close the batch of inputs
     try? fh.close()
@@ -222,7 +188,7 @@ fileprivate func writeAsPrompts<T:Encodable>(_ data: [T], _ outurl: URL) throws 
           // this is very sensitive
           fh.write("]\n,\"outputs\": \n".data(using: .utf8)!)// close the batch of inputs
         }
-        fh.write(training_data.data(using: .utf8)!)
+        fh.write(templateContents.data(using: .utf8)!)
       }
       let da  = try encoder.encode(d)
       let json = String(data:da ,encoding: .utf8)
@@ -234,11 +200,8 @@ fileprivate func writeAsPrompts<T:Encodable>(_ data: [T], _ outurl: URL) throws 
         bc += outs.count
         fh.write(outs.data(using: .utf8)!)
       }
-      
       batchCount = (batchCount + 1) % batchLimit
     }
-    
- 
   }
   catch {
     print ("Can't write output \(error)")
@@ -252,7 +215,7 @@ func writeVeracityPromptScript(_ urls:[String], gameFile:String)
   var topicCount = 0
   var fileCount = 0
   //let start_time = Date()
-   
+  
   let promptsURL = URL(string:gameFile)
   guard let promptsURL =  promptsURL else { return }
   for url in urls {
@@ -284,7 +247,7 @@ func writeVeracityPromptScript(_ urls:[String], gameFile:String)
       if let last = lastTopic  {
         if challenge.topic != last {
           gameDatum.append( GameData(topic:last,challenges: theseChallenges))
-          print("Topic - \(last): \(theseChallenges.count)")
+        //  print("Topic - \(last): \(theseChallenges.count)")
           theseChallenges = []
           topicCount += 1
         }
@@ -297,7 +260,7 @@ func writeVeracityPromptScript(_ urls:[String], gameFile:String)
     if let last = lastTopic {
       topicCount += 1
       gameDatum.append( GameData(topic:last,challenges: theseChallenges)) //include remainders
-      print("Topic - \(last): \(theseChallenges.count)")
+     // print("Topic - \(last): \(theseChallenges.count)")
     }
     // compute truth challenges
     var cha:[TruthQuery] = []
@@ -316,12 +279,20 @@ func writeVeracityPromptScript(_ urls:[String], gameFile:String)
   }
 }
 
+func loadtemplate(_ s:String) throws -> String {
+  if  let x = URL(string:s){
+      return try String(contentsOf:x,encoding: .utf8)
+    }
+  else {
+    throw PrepperError.badTemplateURL
+  }
+}
 
 // MARK: - command line parsing with Argument Parser
 struct Prepper: ParsableCommand {
   static let configuration = CommandConfiguration(
     abstract: "Step 2: Prepper reads the JSON Challenges from Pumper de-duplicates, and prepares a new script. This script contains questions about the veracity of the JSON data and is read by Veracitator.",
-    version: "0.5.1",
+    version: "0.5.3",
     subcommands: [],
     defaultSubcommand: nil,
     helpNames: [.long, .short]
@@ -331,11 +302,14 @@ struct Prepper: ParsableCommand {
   var url: String
   @Argument(help: "output file (Between_2_3.txt):")
   var gameFile: String
-
+  @Argument(help: "training template (veracity-template.txt):")
+  var templateFileURLString: String
+  
   mutating func run() throws {
     let start_time = Date()
     print(">Prepper Command Line: \(CommandLine.arguments)")
     print(">Prepper is STEP2 running at \(Date())")
+    templateContents = try loadtemplate(templateFileURLString)
     analyze([url])
     writeVeracityPromptScript([url], gameFile:gameFile)
     let elapsed = Date().timeIntervalSince(start_time)
